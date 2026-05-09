@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { format } from "date-fns";
+import { useTransactions, type TxStatus } from "@/lib/hooks/use-transactions";
 import {
   CalendarIcon,
   CheckCircle2,
@@ -13,11 +14,6 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import {
-  generateMockTransactions,
-  type Transaction,
-  type TxStatus,
-} from "@/lib/mock-transactions";
 
 function cn(...classes: (string | false | undefined)[]) {
   return classes.filter(Boolean).join(" ");
@@ -66,7 +62,6 @@ interface TxListPageProps {
   accent: "success" | "warning" | "danger";
 }
 
-// Simple inline calendar (month view, range select)
 function DateRangePicker({
   value,
   onChange,
@@ -195,9 +190,9 @@ export function TxListPage({
   actions,
   accent,
 }: TxListPageProps) {
-  const [data, setData] = useState<Transaction[]>(() =>
-    generateMockTransactions(60).filter((t) => t.status === status),
-  );
+  const { data, loading, bulkApprove, bulkReject, bulkRemove } =
+    useTransactions(status);
+
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({});
@@ -211,8 +206,8 @@ export function TxListPage({
         const q = search.toLowerCase();
         if (
           !t.number.includes(q) &&
-          !t.id.toLowerCase().includes(q) &&
-          !t.last4.includes(q)
+          !t._id.toLowerCase().includes(q) &&
+          !t.last4Digit.includes(q)
         )
           return false;
       }
@@ -233,38 +228,38 @@ export function TxListPage({
 
   const visible = filtered.slice(0, viewCount);
   const allChecked =
-    visible.length > 0 && visible.every((t) => selected.has(t.id));
+    visible.length > 0 && visible.every((t) => selected.has(t._id));
 
   const toggleAll = () => {
     const next = new Set(selected);
-    if (allChecked) visible.forEach((t) => next.delete(t.id));
-    else visible.forEach((t) => next.add(t.id));
+    if (allChecked) visible.forEach((t) => next.delete(t._id));
+    else visible.forEach((t) => next.add(t._id));
     setSelected(next);
   };
+
   const toggleOne = (id: string) => {
     const next = new Set(selected);
     next.has(id) ? next.delete(id) : next.add(id);
     setSelected(next);
   };
 
-  const removeIds = (ids: string[]) => {
-    setData((prev) => prev.filter((t) => !ids.includes(t.id)));
+  const selectedIds = Array.from(selected);
+
+  const onApprove = async (ids: string[]) => {
+    await bulkApprove(ids);
     setSelected(new Set());
   };
-  const onApprove = (ids: string[]) => {
-    removeIds(ids);
+  const onReject = async (ids: string[]) => {
+    await bulkReject(ids);
+    setSelected(new Set());
   };
-  const onReject = (ids: string[]) => {
-    removeIds(ids);
-  };
-  const onDelete = (ids: string[]) => {
-    removeIds(ids);
+  const onDelete = async (ids: string[]) => {
+    await bulkRemove(ids);
+    setSelected(new Set());
     setDeleteConfirm(null);
   };
 
-  const selectedIds = Array.from(selected);
   const hasFilters = !!search || !!dateRange.from;
-
   const dateLabel = dateRange.from
     ? dateRange.to
       ? `${format(dateRange.from, "MMM d")} – ${format(dateRange.to, "MMM d")}`
@@ -294,7 +289,6 @@ export function TxListPage({
 
       {/* Filters */}
       <div className="bg-white rounded-2xl ring-1 ring-gray-200 shadow-sm p-3 sm:p-4 flex flex-col sm:flex-row gap-2">
-        {/* Search */}
         <div className="relative flex-1 min-w-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
           <input
@@ -314,7 +308,6 @@ export function TxListPage({
         </div>
 
         <div className="flex gap-2 flex-wrap">
-          {/* Date picker */}
           <div className="relative">
             <button
               onClick={() => setCalOpen((v) => !v)}
@@ -352,7 +345,6 @@ export function TxListPage({
             )}
           </div>
 
-          {/* View count */}
           <select
             value={viewCount}
             onChange={(e) => setViewCount(Number(e.target.value))}
@@ -365,7 +357,6 @@ export function TxListPage({
             ))}
           </select>
 
-          {/* Reset */}
           {hasFilters && (
             <button
               onClick={() => {
@@ -383,7 +374,7 @@ export function TxListPage({
 
       {/* Bulk action bar */}
       {selected.size > 0 && (
-        <div className="sticky top-14.25 lg:top-16.25 z-20 flex flex-wrap items-center justify-between gap-3 bg-[#1A3955] text-white rounded-2xl px-4 py-3 shadow-lg">
+        <div className="sticky top-14 lg:top-16 z-20 flex flex-wrap items-center justify-between gap-3 bg-[#1A3955] text-white rounded-2xl px-4 py-3 shadow-lg">
           <p className="text-sm font-medium">{selected.size} selected</p>
           <div className="flex flex-wrap gap-2">
             {actions.includes("approve") && (
@@ -445,7 +436,17 @@ export function TxListPage({
               </tr>
             </thead>
             <tbody>
-              {visible.length === 0 ? (
+              {loading ? (
+                Array.from({ length: 6 }).map((_, i) => (
+                  <tr key={i} className="border-t border-gray-100">
+                    {Array.from({ length: 9 }).map((_, j) => (
+                      <td key={j} className="px-2 py-3">
+                        <div className="h-4 rounded-full bg-gray-200 animate-pulse" />
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : visible.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="text-center py-12 text-gray-400">
                     No transactions
@@ -454,22 +455,22 @@ export function TxListPage({
               ) : (
                 visible.map((t) => (
                   <tr
-                    key={t.id}
+                    key={t._id}
                     className={cn(
                       "border-t border-gray-100 hover:bg-gray-50 transition",
-                      selected.has(t.id) && "bg-blue-50/40",
+                      selected.has(t._id) && "bg-blue-50/40",
                     )}
                   >
                     <td className="px-4 py-3">
                       <input
                         type="checkbox"
-                        checked={selected.has(t.id)}
-                        onChange={() => toggleOne(t.id)}
+                        checked={selected.has(t._id)}
+                        onChange={() => toggleOne(t._id)}
                         className="rounded accent-[#1A3955]"
                       />
                     </td>
                     <td className="px-2 py-3 font-mono text-xs text-gray-400">
-                      {t.id}
+                      {t._id.slice(-6)}
                     </td>
                     <td className="px-2 py-3 font-mono text-[#1A3955]">
                       {t.number}
@@ -479,7 +480,7 @@ export function TxListPage({
                     </td>
                     <td className="px-2 py-3 text-gray-600">{t.method}</td>
                     <td className="px-2 py-3 font-mono text-gray-600">
-                      {t.last4}
+                      {t.last4Digit}
                     </td>
                     <td
                       className="px-2 py-3 text-gray-400 whitespace-nowrap"
@@ -494,7 +495,7 @@ export function TxListPage({
                       <div className="flex justify-end gap-1">
                         {actions.includes("approve") && (
                           <button
-                            onClick={() => onApprove([t.id])}
+                            onClick={() => onApprove([t._id])}
                             title="Approve"
                             className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 transition"
                           >
@@ -503,7 +504,7 @@ export function TxListPage({
                         )}
                         {actions.includes("reject") && (
                           <button
-                            onClick={() => onReject([t.id])}
+                            onClick={() => onReject([t._id])}
                             title="Reject"
                             className="p-1.5 rounded-lg text-red-600 hover:bg-red-50 transition"
                           >
@@ -512,7 +513,7 @@ export function TxListPage({
                         )}
                         {actions.includes("delete") && (
                           <button
-                            onClick={() => setDeleteConfirm([t.id])}
+                            onClick={() => setDeleteConfirm([t._id])}
                             title="Delete"
                             className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 transition"
                           >
@@ -531,97 +532,112 @@ export function TxListPage({
 
       {/* Mobile cards */}
       <div className="md:hidden space-y-3">
-        {visible.length > 0 && (
-          <label className="flex items-center gap-2 text-xs text-gray-400 px-1 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={allChecked}
-              onChange={toggleAll}
-              className="rounded accent-[#1A3955]"
-            />
-            Select all visible
-          </label>
-        )}
-        {visible.length === 0 ? (
-          <div className="bg-white rounded-2xl p-8 text-center text-gray-400 ring-1 ring-gray-200">
-            No transactions
-          </div>
-        ) : (
-          visible.map((t) => (
+        {loading ? (
+          Array.from({ length: 4 }).map((_, i) => (
             <div
-              key={t.id}
-              className={cn(
-                "bg-white rounded-2xl p-4 ring-1 ring-gray-200 space-y-3",
-                selected.has(t.id) && "ring-[#1A3955] bg-blue-50/20",
-              )}
+              key={i}
+              className="bg-white rounded-2xl p-4 ring-1 ring-gray-200 space-y-3"
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3 min-w-0">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(t.id)}
-                    onChange={() => toggleOne(t.id)}
-                    className="mt-1 rounded accent-[#1A3955]"
-                  />
-                  <div className="min-w-0">
-                    <p className="font-mono text-[#1A3955] font-medium truncate">
-                      {t.number}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {t.id} · {t.method} · ****{t.last4}
-                    </p>
-                    <p
-                      className="text-xs text-gray-400 mt-0.5"
-                      suppressHydrationWarning
-                    >
-                      {format(new Date(t.createdAt), "MMM d, yyyy · HH:mm")}
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="font-bold text-[#1A3955]">৳{t.amount}</p>
-                  <div className="mt-1">
-                    <StatusPill status={t.status} />
-                  </div>
-                </div>
-              </div>
-              <div
-                className={cn(
-                  "grid gap-2",
-                  actions.length === 1
-                    ? "grid-cols-1"
-                    : actions.length === 2
-                      ? "grid-cols-2"
-                      : "grid-cols-3",
-                )}
-              >
-                {actions.includes("approve") && (
-                  <button
-                    onClick={() => onApprove([t.id])}
-                    className="flex items-center justify-center gap-1 h-9 rounded-xl bg-green-500 hover:bg-green-600 text-white text-sm font-medium transition"
-                  >
-                    <CheckCircle2 className="h-4 w-4" /> Approve
-                  </button>
-                )}
-                {actions.includes("reject") && (
-                  <button
-                    onClick={() => onReject([t.id])}
-                    className="flex items-center justify-center gap-1 h-9 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition"
-                  >
-                    <CircleX className="h-4 w-4" /> Reject
-                  </button>
-                )}
-                {actions.includes("delete") && (
-                  <button
-                    onClick={() => setDeleteConfirm([t.id])}
-                    className="flex items-center justify-center gap-1 h-9 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 text-sm font-medium transition"
-                  >
-                    <Trash2 className="h-4 w-4" /> Delete
-                  </button>
-                )}
-              </div>
+              <div className="h-4 bg-gray-200 rounded-full animate-pulse w-3/4" />
+              <div className="h-3 bg-gray-200 rounded-full animate-pulse w-1/2" />
+              <div className="h-8 bg-gray-200 rounded-xl animate-pulse" />
             </div>
           ))
+        ) : (
+          <>
+            {visible.length > 0 && (
+              <label className="flex items-center gap-2 text-xs text-gray-400 px-1 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={allChecked}
+                  onChange={toggleAll}
+                  className="rounded accent-[#1A3955]"
+                />
+                Select all visible
+              </label>
+            )}
+            {visible.length === 0 ? (
+              <div className="bg-white rounded-2xl p-8 text-center text-gray-400 ring-1 ring-gray-200">
+                No transactions
+              </div>
+            ) : (
+              visible.map((t) => (
+                <div
+                  key={t._id}
+                  className={cn(
+                    "bg-white rounded-2xl p-4 ring-1 ring-gray-200 space-y-3",
+                    selected.has(t._id) && "ring-[#1A3955] bg-blue-50/20",
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(t._id)}
+                        onChange={() => toggleOne(t._id)}
+                        className="mt-1 rounded accent-[#1A3955]"
+                      />
+                      <div className="min-w-0">
+                        <p className="font-mono text-[#1A3955] font-medium truncate">
+                          {t.number}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {t._id.slice(-6)} · {t.method} · ****{t.last4Digit}
+                        </p>
+                        <p
+                          className="text-xs text-gray-400 mt-0.5"
+                          suppressHydrationWarning
+                        >
+                          {format(new Date(t.createdAt), "MMM d, yyyy · HH:mm")}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="font-bold text-[#1A3955]">৳{t.amount}</p>
+                      <div className="mt-1">
+                        <StatusPill status={t.status} />
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    className={cn(
+                      "grid gap-2",
+                      actions.length === 1
+                        ? "grid-cols-1"
+                        : actions.length === 2
+                          ? "grid-cols-2"
+                          : "grid-cols-3",
+                    )}
+                  >
+                    {actions.includes("approve") && (
+                      <button
+                        onClick={() => onApprove([t._id])}
+                        className="flex items-center justify-center gap-1 h-9 rounded-xl bg-green-500 hover:bg-green-600 text-white text-sm font-medium transition"
+                      >
+                        <CheckCircle2 className="h-4 w-4" /> Approve
+                      </button>
+                    )}
+                    {actions.includes("reject") && (
+                      <button
+                        onClick={() => onReject([t._id])}
+                        className="flex items-center justify-center gap-1 h-9 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition"
+                      >
+                        <CircleX className="h-4 w-4" /> Reject
+                      </button>
+                    )}
+                    {actions.includes("delete") && (
+                      <button
+                        onClick={() => setDeleteConfirm([t._id])}
+                        className="flex items-center justify-center gap-1 h-9 rounded-xl border border-gray-200 text-gray-500 hover:bg-gray-50 text-sm font-medium transition"
+                      >
+                        <Trash2 className="h-4 w-4" /> Delete
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </>
         )}
       </div>
 
@@ -654,7 +670,6 @@ export function TxListPage({
         </div>
       )}
 
-      {/* Close calendar on outside click */}
       {calOpen && (
         <div className="fixed inset-0 z-20" onClick={() => setCalOpen(false)} />
       )}

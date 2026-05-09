@@ -1,5 +1,7 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { generateMockTransactions } from "@/lib/mock-transactions";
 import { CheckCircle2, Clock, CircleX, Wallet, ArrowRight } from "lucide-react";
 
 function cn(...classes: (string | false | undefined)[]) {
@@ -8,18 +10,29 @@ function cn(...classes: (string | false | undefined)[]) {
 
 type TxStatus = "Success" | "Pending" | "Rejected";
 
+interface Transaction {
+  _id: string;
+  number: string;
+  amount: number;
+  method: string;
+  status: TxStatus;
+  createdAt: string;
+}
+
 function StatCard({
   label,
   value,
   icon: Icon,
   tone,
   hint,
+  loading,
 }: {
   label: string;
   value: string;
   icon: React.ElementType;
   tone: "success" | "warning" | "danger" | "brand";
   hint?: string;
+  loading?: boolean;
 }) {
   const tones = {
     success: "bg-green-50 text-green-700 ring-green-200",
@@ -40,9 +53,13 @@ function StatCard({
           <Icon className="h-4 w-4" />
         </div>
       </div>
-      <p className="text-2xl lg:text-3xl font-bold text-[#1A3955] tracking-tight">
-        {value}
-      </p>
+      {loading ? (
+        <div className="h-9 bg-gray-200 rounded-full animate-pulse w-20" />
+      ) : (
+        <p className="text-2xl lg:text-3xl font-bold text-[#1A3955] tracking-tight">
+          {value}
+        </p>
+      )}
       {hint && <p className="text-xs text-gray-500">{hint}</p>}
     </div>
   );
@@ -67,12 +84,38 @@ function StatusPill({ status }: { status: TxStatus }) {
 }
 
 export default function AdminDashboard() {
-  const txns = generateMockTransactions(48);
-  const success = txns.filter((t) => t.status === "Success");
-  const rejected = txns.filter((t) => t.status === "Rejected");
-  const pending = txns.filter((t) => t.status === "Pending");
-  const totalAmount = success.reduce((s, t) => s + t.amount, 0);
-  const recent = txns.slice(0, 6);
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    success: 0,
+    rejected: 0,
+    pending: 0,
+    total: 0,
+  });
+  const [recent, setRecent] = useState<Transaction[]>([]);
+
+  useEffect(() => {
+    fetch("/api/recharge?admin=1")
+      .then((r) => r.json())
+      .then(({ records }) => {
+        const success: Transaction[] = records.filter(
+          (t: Transaction) => t.status === "Success",
+        );
+        const rejected: Transaction[] = records.filter(
+          (t: Transaction) => t.status === "Rejected",
+        );
+        const pending: Transaction[] = records.filter(
+          (t: Transaction) => t.status === "Pending",
+        );
+        setStats({
+          success: success.length,
+          rejected: rejected.length,
+          pending: pending.length,
+          total: success.reduce((s, t) => s + t.amount, 0),
+        });
+        setRecent(records.slice(0, 6));
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto w-full">
@@ -88,31 +131,35 @@ export default function AdminDashboard() {
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Successful"
-          value={String(success.length)}
+          value={String(stats.success)}
           icon={CheckCircle2}
           tone="success"
           hint="Approved recharges"
+          loading={loading}
         />
         <StatCard
           label="Rejected"
-          value={String(rejected.length)}
+          value={String(stats.rejected)}
           icon={CircleX}
           tone="danger"
           hint="Declined requests"
+          loading={loading}
         />
         <StatCard
           label="Pending"
-          value={String(pending.length)}
+          value={String(stats.pending)}
           icon={Clock}
           tone="warning"
           hint="Awaiting review"
+          loading={loading}
         />
         <StatCard
           label="Total Amount"
-          value={`৳${totalAmount.toLocaleString()}`}
+          value={`৳${stats.total.toLocaleString()}`}
           icon={Wallet}
           tone="brand"
           hint="From successful recharges"
+          loading={loading}
         />
       </div>
 
@@ -130,29 +177,53 @@ export default function AdminDashboard() {
           </Link>
         </div>
         <ul className="divide-y divide-gray-100">
-          {recent.map((t) => (
-            <li
-              key={t.id}
-              className="flex items-center justify-between gap-3 px-5 py-3 text-sm"
-            >
-              <div className="min-w-0">
-                <p className="font-mono text-[#1A3955] truncate">{t.number}</p>
-                <p className="text-xs text-gray-500" suppressHydrationWarning>
-                  {t.method} ·{" "}
-                  {new Date(t.createdAt)
-                    .toISOString()
-                    .slice(0, 16)
-                    .replace("T", " ")}
-                </p>
-              </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <span className="font-semibold text-[#1A3955]">
-                  ৳{t.amount}
-                </span>
-                <StatusPill status={t.status} />
-              </div>
+          {loading ? (
+            Array.from({ length: 6 }).map((_, i) => (
+              <li
+                key={i}
+                className="flex items-center justify-between gap-3 px-5 py-3"
+              >
+                <div className="space-y-2 flex-1">
+                  <div className="h-3.5 bg-gray-200 rounded-full animate-pulse w-32" />
+                  <div className="h-3 bg-gray-200 rounded-full animate-pulse w-48" />
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <div className="h-3.5 bg-gray-200 rounded-full animate-pulse w-12" />
+                  <div className="h-5 bg-gray-200 rounded-full animate-pulse w-16" />
+                </div>
+              </li>
+            ))
+          ) : recent.length === 0 ? (
+            <li className="px-5 py-8 text-center text-sm text-gray-400">
+              No transactions yet
             </li>
-          ))}
+          ) : (
+            recent.map((t) => (
+              <li
+                key={t._id}
+                className="flex items-center justify-between gap-3 px-5 py-3 text-sm"
+              >
+                <div className="min-w-0">
+                  <p className="font-mono text-[#1A3955] truncate">
+                    {t.number}
+                  </p>
+                  <p className="text-xs text-gray-500" suppressHydrationWarning>
+                    {t.method} ·{" "}
+                    {new Date(t.createdAt)
+                      .toISOString()
+                      .slice(0, 16)
+                      .replace("T", " ")}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className="font-semibold text-[#1A3955]">
+                    ৳{t.amount}
+                  </span>
+                  <StatusPill status={t.status} />
+                </div>
+              </li>
+            ))
+          )}
         </ul>
       </div>
     </div>
