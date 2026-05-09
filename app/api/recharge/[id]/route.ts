@@ -4,16 +4,18 @@ import Recharge from "@/models/Recharge";
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     await connectDB();
+    const { id } = await params;
     const { status } = await req.json();
+
     if (!["Pending", "Success", "Rejected"].includes(status))
       return NextResponse.json({ error: "Invalid status" }, { status: 400 });
 
     const updated = await Recharge.findByIdAndUpdate(
-      params.id,
+      id,
       { status },
       { new: true },
     );
@@ -29,11 +31,12 @@ export async function PATCH(
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
     await connectDB();
-    await Recharge.findByIdAndDelete(params.id);
+    const { id } = await params;
+    await Recharge.findByIdAndDelete(id);
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("DELETE error:", err);
