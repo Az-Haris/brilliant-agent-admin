@@ -129,30 +129,36 @@ export default function AdminDashboard() {
       </div>
 
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="Successful"
-          value={String(stats.success)}
-          icon={CheckCircle2}
-          tone="success"
-          hint="Approved recharges"
-          loading={loading}
-        />
-        <StatCard
-          label="Rejected"
-          value={String(stats.rejected)}
-          icon={CircleX}
-          tone="danger"
-          hint="Declined requests"
-          loading={loading}
-        />
-        <StatCard
-          label="Pending"
-          value={String(stats.pending)}
-          icon={Clock}
-          tone="warning"
-          hint="Awaiting review"
-          loading={loading}
-        />
+        <Link href="/admin/transactions">
+          <StatCard
+            label="Successful"
+            value={String(stats.success)}
+            icon={CheckCircle2}
+            tone="success"
+            hint="Approved recharges"
+            loading={loading}
+          />
+        </Link>
+        <Link href="/admin/rejected">
+          <StatCard
+            label="Rejected"
+            value={String(stats.rejected)}
+            icon={CircleX}
+            tone="danger"
+            hint="Declined requests"
+            loading={loading}
+          />
+        </Link>
+        <Link href="/admin/pending">
+          <StatCard
+            label="Pending"
+            value={String(stats.pending)}
+            icon={Clock}
+            tone="warning"
+            hint="Awaiting review"
+            loading={loading}
+          />
+        </Link>
         <StatCard
           label="Total Amount"
           value={`৳${stats.total.toLocaleString()}`}
