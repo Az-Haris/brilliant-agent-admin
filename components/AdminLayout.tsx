@@ -15,15 +15,15 @@ import {
 } from "lucide-react";
 
 const navItems = [
-  { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  { to: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
   {
-    to: "/admin/transactions",
+    to: "/transactions",
     label: "Successful",
     icon: CheckCircle2,
     exact: false,
   },
-  { to: "/admin/pending", label: "Pending", icon: Clock, exact: false },
-  { to: "/admin/rejected", label: "Rejected", icon: CircleX, exact: false },
+  { to: "/pending", label: "Pending", icon: Clock, exact: false },
+  { to: "/rejected", label: "Rejected", icon: CircleX, exact: false },
 ];
 
 function cn(...classes: (string | false | undefined)[]) {
