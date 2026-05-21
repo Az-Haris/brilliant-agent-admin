@@ -1,6 +1,6 @@
 {
-  "name": "Brilliant Agent Recharge",
-  "short_name": "Brilliant Recharge",
+  "name": "Brilliant Agent Admin",
+  "short_name": "Brilliant Admin",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
