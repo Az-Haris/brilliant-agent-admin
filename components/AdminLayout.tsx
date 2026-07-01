@@ -12,6 +12,7 @@ import {
   LogOut,
   Wallet,
   X,
+  Pickaxe,
 } from "lucide-react";
 
 const navItems = [
@@ -24,6 +25,7 @@ const navItems = [
   },
   { to: "/pending", label: "Pending", icon: Clock, exact: false },
   { to: "/rejected", label: "Rejected", icon: CircleX, exact: false },
+  { to: "/extractor", label: "Extractor", icon: Pickaxe, exact: false },
 ];
 
 function cn(...classes: (string | false | undefined)[]) {
