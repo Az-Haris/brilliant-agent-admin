@@ -1103,7 +1103,7 @@ export default function PhoneExtractorPage() {
     if (workerInitPromise.current) return workerInitPromise.current;
     workerInitPromise.current = (async () => {
       try {
-        const worker = await createWorker("eng");
+        const worker = await createWorker(["eng", "ben"]);
         await worker.setParameters({ tessedit_char_whitelist: "0123456789+" });
         workerRef.current = worker;
         setTesseractReady(true);
